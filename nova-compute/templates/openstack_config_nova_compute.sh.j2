@@ -1,0 +1,9 @@
+#!/bin/bash
+{% for config_path in config %}
+{% for section in config[config_path] %}
+{% for c  in config[config_path][section]%}
+openstack-config --set {{ config_path }} {{ section }} {{ c }} {{ config[config_path][section][c] }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+

@@ -1,0 +1,104 @@
+---
+# vars file for nova-server
+database_name:
+  - nova_api
+  - nova
+  - nova_cell0
+
+user_privilege:
+  - "%"
+  - localhost
+db_user_name: nova
+db_user_password: 123456
+service:
+  - openstack-nova-api.service 
+  - openstack-nova-consoleauth.service 
+  - openstack-nova-scheduler.service 
+  - openstack-nova-conductor.service 
+  - openstack-nova-novncproxy.service
+
+user:
+  - name: nova
+    domain: default
+    password: "{{nova_password}}"
+  - name: placement
+    domain: default
+    password: 123456
+bind:
+  - project: service
+    user: nova
+    role: admin
+  - project: service
+    user: placement
+    role: admin
+endpoint:
+  - name: compute 
+    url: http://loadip:8774/v2.1
+  - name: placement
+    url: http://loadip:8778
+
+create_service:
+  - name: nova
+    description: "OpenStack Compute"
+    contend: compute
+  - name: placement 
+    description: "Placement API"
+    contend: placement
+
+zone:
+  - public
+  - internal
+  - admin
+
+require_install:
+  - openstack-nova-api
+  - openstack-nova-conductor
+  - openstack-nova-console
+  - openstack-nova-novncproxy
+  - openstack-nova-scheduler 
+  - openstack-nova-placement-api
+
+config:
+  /etc/nova/nova.conf:
+    DEFAULT:
+      enabled_apis: osapi_compute,metadata
+      firewall_driver: nova.virt.firewall.NoopFirewallDriver
+      my_ip: "{{admin_ip}}"
+      transport_url: rabbit://openstack:{{rabbitMQ_password}}@loadip
+      use_neutron: 'True'
+      osapi_compute_listen: "{{admin_ip}}"
+    scheduler:
+      discover_hosts_in_cells_interval: 300
+    api:
+      auth_strategy: keystone
+    api_database:
+      connection: mysql+pymysql://nova:{{db_user_password}}@loadip/nova_api
+    database:
+      connection: mysql+pymysql://nova:{{db_user_password}}@loadip/nova
+    glance:
+      api_servers: http://loadip:9292
+    keystone_authtoken:
+      auth_type: password
+      auth_url: http://loadip:5000/v3
+      memcached_servers: "{{admin_ip}}:11211"
+      password: '{{keystone_password}}'
+      project_domain_name: default
+      project_name: service
+      user_domain_name: default
+      username: nova
+    oslo_concurrency:
+      lock_path: /var/lib/nova/tmp
+    placement:
+      auth_type: password
+      auth_url: http://loadip:5000/v3
+      os_region_name: RegionOne
+      password: "{{placement_password}}"
+      project_domain_name: Default
+      project_name: service
+      user_domain_name: Default
+      username: placement
+    vnc:
+      enabled: 'true'
+      server_listen: "{{admin_ip}}"
+      server_proxyclient_address: "{{admin_ip}}"
+

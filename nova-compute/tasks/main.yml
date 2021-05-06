@@ -1,0 +1,67 @@
+---
+# tasks file for nova-compute
+- name: set hosts file
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      {{admin_vip}} loadip
+    marker: "#{mark} set loadip  hosts"
+    backup: yes
+
+- name: Achieve admin data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve public data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set public ip and public device
+  set_fact:
+    public_ip: "{{results.stdout_lines[1]}}"
+    public_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve storage data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set storage ip and storage device
+  set_fact:
+    storage_ip: "{{results.stdout_lines[1]}}"
+    storage_device: "{{results.stdout_lines[0]}}"
+
+- name: Install nova-compute
+  yum:
+    name: "{{item}}"
+    state: installed
+  with_items:
+    - python-openstackclient 
+    - openstack-utils
+    - openstack-nova-compute
+- name: Create config shell script
+  template:
+    src: openstack_config_nova_compute.sh.j2
+    dest: /tmp/openstack_config_nova_compute.sh
+    mode: '700'
+    backup: yes
+
+- name: Execute shell script
+  shell: |
+    /bin/bash /tmp/openstack_config_nova_compute.sh
+
+- name: Start and Enable nova
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+  with_items:
+    - libvirtd.service 
+    - openstack-nova-compute.service

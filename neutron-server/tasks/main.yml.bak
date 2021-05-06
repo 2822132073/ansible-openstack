@@ -1,0 +1,154 @@
+---
+# tasks file for neutron-server
+- name: Achieve admin data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve public data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set public ip and public device
+  set_fact:
+    public_ip: "{{results.stdout_lines[1]}}"
+    public_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve storage data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set storage ip and storage device
+  set_fact:
+    storage_ip: "{{results.stdout_lines[1]}}"
+    storage_device: "{{results.stdout_lines[0]}}"
+
+- name: Install neutron-server 
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - openstack-neutron 
+    - openstack-neutron-ml2 
+    - openstack-neutron-linuxbridge 
+    - ebtables
+- name: Create a new database with name "{{item}}"
+  mysql_db:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: "{{item}}"
+    state: present
+  with_items:
+    - neutron
+  when: master == 1
+
+- name:  Create a new user with name neutron
+  mysql_user:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{mysql_password}}"
+    name: neutron
+    priv: "neutron.*:ALL"
+    host: "{{item}}"
+    password: "{{db_user_password}}"
+    state: present
+    append_privs: true
+  when: master == 1
+  with_items:
+    - "{{user_privilege}}"
+
+- name: sysctl alter
+  sysctl:
+    name: "{{item}}"
+    value: 1
+    sysctl_file: /etc/sysctl.d/bridge_filters.conf
+    sysctl_set: yes
+    ignoreerrors: yes
+  with_items:
+    - "net.bridge.bridge-nf-call-iptables"
+    - "net.bridge.bridge-nf-call-ip6tables"
+  
+
+- name: Add User
+  shell: |
+    . ~/admin-openrc
+    openstack user create --domain "{{item.domain}}" --password "{{item.password}}" "{{item.name}}" 
+  with_items:
+    - "{{user}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: relevance project and user role
+  shell: |
+     . ~/admin-openrc
+     openstack role add --project "{{item.project}}" --user "{{item.user}}"  "{{item.role}}" 
+  with_items:
+    - "{{bind}}"
+  ignore_errors: yes
+  when: master == 1
+
+
+- name: Create service
+  shell: |
+    . ~/admin-openrc
+    openstack service create --name "{{item.name}}" --description "{{item.description}}" "{{item.contend}}" 
+  with_items:
+    - "{{create_service}}"
+  when: master == 1
+  ignore_errors: yes
+
+- name: Create endpoint
+  shell: |
+    . ~/admin-openrc
+    openstack endpoint create --region RegionOne "{{item.0.name}}" "{{item.1}}" "{{item.0.url}}" 
+  with_cartesian:
+    - "{{endpoint}}"
+    - "{{zone}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Create Keystone config shell script
+  template:
+    src: openstack_config_nova_server.sh.j2
+    dest: /tmp/openstack_config_nova_server.sh
+    mode: '700'
+    backup: yes
+
+- name: Execute keystone shell script
+  shell: |
+    /bin/bash /tmp/openstack_config_nova_server.sh
+
+- name: Create link 
+  file:
+    src: /etc/neutron/plugins/ml2/ml2_conf.ini
+    dest: /etc/neutron/plugin.ini
+    state: link 
+
+- name: Sync Database
+  shell: |
+     su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf   --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+  when: master == 1
+
+- name: Restart Nova_api
+  systemd:
+    name: openstack-nova-api.service
+    state: restarted
+
+- name: Enable and start neutron
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+  with_items:
+    - neutron-server.service 
+    - neutron-linuxbridge-agent.service 
+    - neutron-dhcp-agent.service 
+    - neutron-metadata-agent.service

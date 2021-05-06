@@ -1,0 +1,6 @@
+---
+# vars file for rabbitMQ
+repo_name:
+  - dvd
+  - openstack-queens
+rabbit_master: "controller01"

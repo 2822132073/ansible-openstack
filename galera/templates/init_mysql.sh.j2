@@ -1,0 +1,11 @@
+#!/bin/bash
+rootPass=`sed -r -n '/root@localhost: /p' /var/log/mysqld.log | awk -F '(: )+' '{print $2}'`
+echo "$rootPass"
+mysql -uroot -p$rootPass --connect-expired-password <<EOF
+set global validate_password_policy=LOW; 
+set global validate_password_length=6; 
+alter user 'root'@'localhost' identified with mysql_native_password by '{{mysql_password}}'; 
+grant all on *.* to 'root'@'%' identified with mysql_native_password by '{{mysql_password}}' with grant option;
+flush privileges;
+EOF
+

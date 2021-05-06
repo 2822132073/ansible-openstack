@@ -1,0 +1,29 @@
+---
+# vars file for cinder
+config:
+  /etc/cinder/cinder.conf:
+    DEFAULT:
+      auth_strategy: keystone
+      enabled_backends: lvm
+      glance_api_servers: http://loadip:9292
+      my_ip: "{{storage_ip}}"
+      transport_url: rabbit://openstack:{{rabbitMQ_password}}@controller
+    database:
+      connection: mysql+pymysql://cinder:{{cinder_password}}@controller/cinder
+    keystone_authtoken:
+      auth_type: password
+      auth_uri: http://loadip:5000
+      auth_url: http://loadip:35357
+      memcached_servers: controller:11211
+      password: "{{keystone_password}}"
+      project_domain_id: default
+      project_name: service
+      user_domain_id: default
+      username: cinder
+    lvm:
+      iscsi_helper: lioadm
+      iscsi_protocol: iscsi
+      volume_driver: cinder.volume.drivers.lvm.LVMVolumeDriver
+      volume_group: cinder-volumes
+    oslo_concurrency:
+      lock_path: /var/lib/cinder/tmp

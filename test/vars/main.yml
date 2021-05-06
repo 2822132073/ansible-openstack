@@ -1,0 +1,18 @@
+---
+network_segment: "10.0.0"
+login_host: 10.0.0.88
+login_password: 123456
+login_mysql_password: 123456
+user_name: nova
+user_password: 123456
+user_privilege:
+  - "%"
+  - localhost
+database_name:
+  - nova
+  - nova_api
+  - nova_cell0
+  - glance
+
+
+

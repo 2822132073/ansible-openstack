@@ -1,0 +1,3 @@
+{% for item in hostvars %}
+ETCD_INITIAL_CLUSTER="{% for item in hostvars %}{{ hostvars[item]['ansible_hostname'] }}=http://{{ hostvars[item]['admin_ip'] }}:2380{% if not loop.last %},{% endif %}{% endfor %}"
+{% endfor %}"

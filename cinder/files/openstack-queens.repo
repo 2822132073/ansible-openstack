@@ -1,0 +1,5 @@
+[centos7-openstack-queens]
+name=centos7 openstack-queens
+baseurl=http://yum.test.com/openstack-queens
+enable=1
+gpgcheck=0

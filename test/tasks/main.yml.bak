@@ -1,0 +1,10 @@
+---
+name: 123123
+  blcok:
+    name: test1
+    set_fact:
+      i: false
+    name: test2
+    debug:
+      msg: "1111111"
+  when: "{{i}}"

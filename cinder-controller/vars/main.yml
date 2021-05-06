@@ -1,0 +1,55 @@
+---
+database_name: cinder
+user_password: "123456"
+user_privilege:
+  - "%"
+  - localhost
+create_service:
+  - name: cinderv2
+    description: "OpenStack Block Storage"
+    contend: volumev2
+  - name: cinderv3
+    description: "OpenStack Block Storage"
+    contend: volumev3
+user:
+  - name: cinder
+    domain: default 
+    password: "{{cinder_password}}"
+bind:
+  - project: service
+    user: cinder
+    role: admin
+
+endpoint:
+  - name: volumev2
+    url: http://loadip:8776/v2/%(project_id)s
+  - name: volumev3 
+    url: http://loadip:8776/v3/%(project_id)s
+zone:
+  - public
+  - internal
+  - admin 
+config:
+  /etc/cinder/cinder.conf:
+    DEFAULT:
+      auth_strategy: keystone
+      my_ip: "{{admin_ip}}"
+      transport_url: rabbit://openstack:{{rabbitMQ_password}}@loadip
+      osapi_volume_listen: "{{admin_ip}}"
+    database:
+      connection: mysql+pymysql://cinder:{{user_password}}@loadip/cinder
+    keystone_authtoken:
+      auth_type: password
+      auth_uri: http://loadip:5000
+      auth_url: http://loadip:35357
+      memcached_servers: "{{admin_ip}}:11211"
+      password: "{{keystone_password}}"
+      project_domain_id: default
+      project_name: service
+      user_domain_id: default
+      username: cinder
+    oslo_concurrency:
+      lock_path: /var/lib/cinder/tmp
+  /etc/nova/nova.conf:
+    cinder:
+      os_region_name: RegionOne

@@ -1,0 +1,71 @@
+---
+# vars file for glance
+# glance_password mysql
+user_password: "123456"
+
+service:
+  - openstack-glance-api.service
+  - openstack-glance-registry.service
+
+create_service:
+  - name: glance 
+    description: "OpenStack Image"
+    contend: image
+user:
+  - name: glance
+    domain: default 
+    password: "{{glance_password}}"
+bind:
+  - project: service
+    user: glance 
+    role: admin
+
+endpoint:
+  - name: image  
+    url: http://loadip:9292 
+
+zone:
+  - public
+  - internal
+  - admin 
+
+config:
+  /etc/glance/glance-api.conf:
+    DEFAULT:
+      bind_host: "{{admin_ip}}"
+    database:
+      connection: mysql+pymysql://glance:{{mysql_password}}@loadip/glance
+    glance_store:
+      default_store: file
+      filesystem_store_datadir: /var/lib/glance/images/
+      stores: file,http
+    keystone_authtoken:
+      auth_type: password
+      auth_uri: http://loadip:5000
+      auth_url: http://loadip:35357
+      memcached_servers: "{{admin_ip}}:11211"
+      password: "{{keystone_password}}"
+      project_domain_name: default
+      project_name: service
+      user_domain_name: default
+      username: glance
+    paste_deploy:
+      flavor: keystone
+  /etc/glance/glance-registry.conf:
+    DEFAULT:
+      bind_host: "{{admin_ip}}"
+    database:
+      connection: mysql+pymysql://glance:{{user_password}}@loadip/glance
+    keystone_authtoken:
+      auth_type: password
+      auth_uri: http://loadip:5000
+      auth_url: http://loadip:35357
+      memcached_servers: "{{admin_ip}}:11211"
+      password: "{{keystone_password}}"
+      project_domain_name: default
+      project_name: service
+      user_domain_name: default
+      username: glance
+    paste_deploy:
+      flavor: keystone
+

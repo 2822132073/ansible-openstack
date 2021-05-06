@@ -1,0 +1,129 @@
+---
+- name: Achieve admin data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve public data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set public ip and public device
+  set_fact:
+    public_ip: "{{results.stdout_lines[1]}}"
+    public_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve storage data from host
+  shell: |
+      ifconfig |grep -B1 "{{storage_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set storage ip and storage device
+  set_fact:
+    storage_ip: "{{results.stdout_lines[1]}}"
+    storage_device: "{{results.stdout_lines[0]}}"
+
+- name: Install rabbitMQ
+  yum:
+    name: rabbitmq-server
+    state: installed
+
+- name: Config rabbit
+  blockinfile:
+    path: /etc/rabbitmq/rabbitmq.config
+    insertafter: "Networking$"
+    content: |
+          {tcp_listeners, [{"127.0.0.1", 5672},{"{{admin_ip}}",5672}]}
+    backup: yes
+    marker: "%%{mark} rabbitMQ config"
+
+- name: Start and enable rabbitMQ
+  systemd:
+    name: rabbitmq-server
+    state: started
+    enabled: yes
+
+- name: stop rabbitmq-server
+  systemd: 
+    name: rabbitmq-server
+    state: stopped
+
+- name: fetch
+  fetch:
+    src: /var/lib/rabbitmq/.erlang.cookie
+    dest: /tmp/backup
+  when: master == 1
+
+- name: copy
+  copy:
+    src: /tmp/backup/controller01/var/lib/rabbitmq/.erlang.cookie 
+    dest: /var/lib/rabbitmq/.erlang.cookie
+    backup: yes
+    mode: 0400
+    owner: rabbitmq
+    group: rabbitmq
+  when: master != 1
+
+- name: Start and enable rabbitMQ
+  systemd:
+    name: rabbitmq-server
+    state: started
+    enabled: yes
+  when: master == 1
+
+- name: Start and enable rabbitMQ
+  systemd:
+    name: rabbitmq-server
+    state: started
+    enabled: yes
+  when: master != 1
+
+- name: set hosts
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      {{ hostvars[item]['admin_ip']  }} {{hostvars[item].ansible_hostname}}
+    marker: "# {mark} set {{item}} hosts "
+  with_items:
+    - "{{groups['controller']}}"
+
+- name: join cluster
+  shell: |
+    rabbitmqctl stop_app
+    rabbitmqctl join_cluster --ram rabbit@{{rabbit_master}}
+    rabbitmqctl start_app
+  when: master != 1
+
+- name: Set policy
+  rabbitmq_policy:
+    name: HA
+    pattern: .*
+    tags:
+      ha-mode: all
+  when: master == 1
+
+
+- name: Add user
+  rabbitmq_user:
+    user: openstack
+    password: "{{rabbitMQ_password}}"
+    permissions:
+      - vhost: /
+        configure_priv: .*
+        read_priv: .*
+        write_priv: .*
+    state: present
+  when: master == 1
+
+
+- name: Enables the rabbitmq_management plugin
+  rabbitmq_plugin:
+    names: rabbitmq_management
+    state: enabled
+

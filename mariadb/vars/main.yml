@@ -1,0 +1,20 @@
+---
+# vars file for mysql
+# Mariadb 需要的软件
+require_install:
+  -  mariadb 
+  -  mariadb-server 
+  -  python2-PyMySQL
+# Mariadb监听的IP
+mysql_listen_to_ip: "10.0.0.88"
+# Mariadb密码,(注意这里需要mariadb是初始无密码状态才可以执行,如果maridb有初始密码,就不能用这个选项)
+mysql_password: "123456"
+# 需要修改的mysql服务器的地址
+login_host: "10.0.0.88"
+user_privilege:
+  - "%"
+  - "localhost"
+repo_name:
+  - dvd
+  - openstack-queens
+yum_ip: 10.0.0.72

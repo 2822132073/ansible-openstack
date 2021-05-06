@@ -1,0 +1,61 @@
+---
+# tasks file for horizon
+- name: Install nova-compute
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - openstack-dashboard 
+
+- name: Achieve admin data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve public data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set public ip and public device
+  set_fact:
+    public_ip: "{{results.stdout_lines[1]}}"
+    public_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve storage data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set storage ip and storage device
+  set_fact:
+    storage_ip: "{{results.stdout_lines[1]}}"
+    storage_device: "{{results.stdout_lines[0]}}"
+
+- name: Config openstack-dashboard
+  template:
+    src: local_settings.j2
+    dest: /etc/openstack-dashboard/local_settings
+    backup: yes
+
+- name: Config httpd
+  blockinfile:
+    path: /etc/httpd/conf.d/openstack-dashboard.conf
+    backup: yes
+    insertbefore: BOF
+    block: |
+      WSGIApplicationGroup %{GLOBAL}
+    marker: "# {mark} dashboard httpd config"
+    
+- name: Restart httpd.service memcached.service
+  systemd:
+    name: "{{item}}"
+    state: restarted
+  with_items:
+    - httpd.service 
+    - memcached.service

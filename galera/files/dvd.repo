@@ -1,0 +1,5 @@
+[centos7dvd]
+name=centos7dvd
+baseurl=http://yum.test.com/dvd
+enable=1
+gpgcheck=0

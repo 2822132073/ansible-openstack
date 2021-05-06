@@ -1,0 +1,6 @@
+主机角色需要定义master为1的节点
+用来确定那个主机用来引导集群
+其它节点不能为master=1
+其它的节点需要设置为master=0
+在/etc/ansible/hosts节点
+还有mysql_password变量为mysql的密码需要定义

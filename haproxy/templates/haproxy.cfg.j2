@@ -1,0 +1,149 @@
+ global
+          chroot   /var/lib/haproxy
+          daemon
+          group    haproxy
+          maxconn  4000
+          pidfile  /var/run/haproxy.pid
+          user     haproxy
+        defaults
+          log  global
+          maxconn  4000
+          option   redispatch
+          retries  3
+          timeout  http-request 10s
+          timeout  queue 1m
+          timeout  connect 10s
+          timeout  client 1m
+          timeout  server 1m
+          timeout  check 10s
+        listen stats
+          bind   {{admin_ip}}:1080
+          mode   http
+          stats  enable
+          stats  uri /
+          stats  realm OpenStack\Haproxy
+          stats  auth admin:admin
+          stats  refresh 30s
+          stats  show-node
+          stats  show-legends
+          stats  hide-version
+        listen galera_mysql
+          bind {{admin_vip}}:3306
+          balance  source
+          mode tcp
+          option   mysql-check user haproxy_check
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}}  {{hostvars[host].admin_ip}}:3306 check port 3306 inter 2000 rise 2 fall 5
+{% endfor %}
+
+        listen rabbitmq
+          bind {{admin_vip}}:5672
+          balance  roundrobin
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:5672 check inter 2000 rise 2 fall 5
+{% endfor %}
+
+        listen keystone_admin 
+          bind {{admin_vip}}:35357
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:35357 check inter 2000 rise 2 fall 5
+{% endfor %}
+
+        listen keystone_internal_public
+          bind {{admin_vip}}:5000
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:5000 check inter 2000 rise 2 fall 5
+{% endfor %}
+        listen glance_admin_internal_public
+          bind {{admin_vip}}:9292
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:9292 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack placement计算服务
+        listen placement_admin_internal_public
+          bind {{admin_vip}}:8778
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8778 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Nova计算服务
+        listen nova_admin_internal_public
+          bind {{admin_vip}}:8774
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8774 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Neutron网络服务
+        listen neutron_admin_internal_public
+          bind {{admin_vip}}:9696
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:9696 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack cinderv2/3卷存储服务
+        listen cinder_admin_internal_public
+          bind {{admin_vip}}:8776
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8776 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Swift对象存储服务
+        listen swift_admin_internal_public
+          bind {{admin_vip}}:8080
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8080 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Ceilometer监控服务
+        listen ceilomete_admin_internal_public
+          bind {{admin_vip}}:8777
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8777 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Gnocchi监控数据海量存储服务
+        listen gnocchi_admin_internal_public
+          bind {{admin_vip}}:8041
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8041 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Aodh警告服务
+        listen aodh_admin_internal_public
+          bind {{admin_vip}}:8042
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:8042 check inter 2000 rise 2 fall 5
+{% endfor %}
+        #################################################################
+        ## OpenStack Dashboard仪表盘服务
+        listen dashboard_admin_internal_public
+          bind {{admin_vip}}:80
+          balance  source
+          mode tcp
+{% for host in groups['controller'] %}
+          server  {{hostvars[host].ansible_hostname}} {{hostvars[host].admin_ip}}:80 check inter 2000 rise 2 fall 5
+{% endfor %}

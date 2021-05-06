@@ -1,0 +1,49 @@
+[mysqld]
+# 设置：数据库基础目录
+datadir=/var/lib/mysql
+# 设置：mysqld进程间通信的<socket套接字文件>
+socket=/var/lib/mysql/mysql.sock
+# 设置：mysqld服务进程的<运行用户账户>
+user=mysql
+# 设置：<BinLog日志模式>为<ROW行模式>
+binlog_format=ROW
+# 绑定：服务侦听的IP地址
+bind-address=$Local_IP
+# 设置：最大连接数
+max-connections=65535
+# 增大：最大错误连接数，该参数可以防止<暴力破解>，达到<阈值>就无条件拒绝连接
+max_connect_errors=4000
+# 禁用：密码复杂性检查
+validate_password=off
+# 设置：默认存储引擎为InnoDB，Galera不能与<MyISAM等非事务性存储引擎>一起工作
+default_storage_engine=innodb
+# 设置：InnoDB锁定模式为2，这是一个<交错锁定模式>，不要更改<该值>，否则会造成<死锁及系统无响应>的问题。
+innodb_autoinc_lock_mode=2
+# 设置：日志落盘模式为：每隔1秒，就将<InnoDB日志缓冲区>落盘写入<磁盘文件>，而不是每次提交时写入一次，以提高性能。
+# 注意：如果整个集群因断电而全部宕机，则一样会有丢失数据的可能。
+innodb_flush_log_at_trx_commit=0
+# 设置：<Innodb内存缓冲区>的大小，用于缓存<表的数据和索引>。
+#      通常是128MB，为了弥补Galera集群在独立MySQL数据库服务器上内存使用量的增加，您应该将通常的值缩减5%。
+innodb_buffer_pool_size=122M
+# 设置：提供<扩展WSREP写集复制功能>的<lib库文件>
+wsrep_provider=/usr/lib64/libgalera_smm.so
+# 设置：<Galera集群>的<cache缓存大小>
+wsrep_provider_options="gcache.size=300M; gcache.page_size=300M"
+# 设置：<Galera集群>的<名称>
+wsrep_cluster_name="example_cluster"
+# 设置：<Galera集群>的<节点IP地址>
+wsrep_cluster_address="gcomm://10.0.0.201,10.0.0.202"
+# 设置：本机的<Galera集群节点名称>
+wsrep_node_name="$HOSTNAME"
+# 设置：本机的<Galera集群节点IP地址>
+wsrep_node_address="$Local_IP"
+# 设置：<Galera集群>的<同步复制工具>
+wsrep_sst_method=rsync
+# 设置：允许导入</etc/my.cnf.d目录>中的<其它配置文件>
+!includedir /etc/my.cnf.d
+[mysql_safe]
+# 设置：错误日志文件
+log-error=/var/log/mysqld.log
+# 设置：进程PID文件
+pid-file=/var/run/mysqld/mysqld.pid
+

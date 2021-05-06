@@ -1,0 +1,106 @@
+---
+- name: Achieve data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Create a new database with name glance
+  mysql_db:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: glance
+    state: present
+  when: master == 1
+
+- name:  Create a new user with name glance 
+  mysql_user:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{mysql_password}}"
+    name: glance
+    priv: "glance.*:ALL"
+    host: "{{ item }}"
+    password: "{{ user_password }}"
+    state: present
+  with_items:
+    - "%"
+    - localhost
+  when: master == 1
+
+- name: install glance
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - openstack-glance
+
+- name: Add User
+  shell: |
+    . ~/admin-openrc
+    openstack user create --domain "{{item.domain}}" --password "{{item.password}}" "{{item.name}}" 
+  with_items:
+    - "{{user}}"
+  ignore_errors: yes
+  when: master == 1
+
+
+- name: relevance project and user role
+  shell: |
+     . ~/admin-openrc
+     openstack role add --project "{{item.project}}" --user "{{item.user}}"  "{{item.role}}" 
+  with_items:
+    - "{{bind}}"
+  ignore_errors: yes
+  when: master == 1
+
+
+- name: Create service
+  shell: |
+    . ~/admin-openrc
+    openstack service create --name "{{item.name}}" --description "{{item.description}}" "{{item.contend}}" 
+  with_items:
+    - "{{create_service}}"
+  when: master == 1
+  ignore_errors: yes
+
+- name: Create endpoint
+  shell: |
+    . ~/admin-openrc
+    openstack endpoint create --region RegionOne "{{item.0.name}}" "{{item.1}}" "{{item.0.url}}" 
+  with_cartesian:
+    - "{{endpoint}}"
+    - "{{zone}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Create Keystone config shell script
+  template:
+    src: openstack_config_glance.sh.j2
+    dest: /tmp/openstack_config_glance.sh
+    mode: '700'
+    backup: yes
+
+- name: Execute keystone shell script
+  shell: |
+    /bin/bash /tmp/openstack_config_glance.sh
+
+- name: Sync Database
+  shell: |
+    su -s /bin/sh -c "glance-manage db_sync" glance
+  args:
+    executable: /bin/bash
+  when: master == 1
+
+- name: Start and Enable glance
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+  with_items:
+    - "{{service}}"

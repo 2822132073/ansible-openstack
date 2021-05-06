@@ -1,0 +1,59 @@
+---
+# tasks file for keepalive
+- name: Achieve data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Achieve  data from host
+  shell: |
+      ifconfig |grep -B1 "{{public_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set public ip and public device
+  set_fact:
+    public_ip: "{{results.stdout_lines[1]}}"
+    public_device: "{{results.stdout_lines[0]}}"
+
+- name: Add load ip
+  blockinfile:
+    path: /etc/hosts
+    block: | 
+      {{admin_vip}} loadip
+    marker: "#{mark} loadip"
+    backup: yes
+
+- name: create dictory
+  file:
+    path: /etc/keepalived/scripts
+    state: directory
+    mode: 0755
+
+- name: Transfer file
+  copy:
+    src: check_haproxy.sh
+    dest: /etc/keepalived/scripts/check_haproxy.sh
+    mode: 0755
+
+
+- name: Install keepalve
+  yum:
+    name:  keepalived
+    state: installed
+
+- name: Create keepalive config
+  template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    backup: yes
+
+- name: Start and enable keepalived
+  systemd:
+    name: keepalived
+    state: started
+    enabled: yes

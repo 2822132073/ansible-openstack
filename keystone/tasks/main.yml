@@ -1,0 +1,191 @@
+---
+- name: Achieve data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: set hosts file
+  blockinfile:
+    path: /etc/hosts
+    block: |
+       {{hostvars[item].admin_ip}} {{hostvars[item].ansible_hostname}}
+    backup: yes
+    marker: "#{mark} set {{item}} hosts"
+  with_items: "{{groups['controller']}}"
+
+- name: Create a new database with name keystone
+  mysql_db:
+    login_host: "{{admin_vip}}"                                
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: "keystone"
+    state: present
+  when: master == 1
+
+ 
+- name:  Create a new user with name keystone
+  mysql_user:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: keystone
+    priv: "keystone.*:ALL"
+    host: "{{ item }}"
+    password: "{{ user_password }}"
+    state: present
+  with_items:
+    - "%"
+    - localhost
+  when: master == 1
+
+- name: Install keystone
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - openstack-keystone 
+    - httpd 
+    - mod_wsgi
+    - python-openstackclient 
+    - openstack-utils
+
+- name: Create Keystone config shell script
+  template:
+    src: openstack_config_keystone.sh.j2
+    dest: /tmp/openstack_config_keystone.sh
+    mode: '700'
+    backup: yes
+
+
+- name: Execute keystone shell script
+  shell: |
+    /bin/bash /tmp/openstack_config_keystone.sh
+
+- name: Sync Database
+  shell: |
+    su -s /bin/sh -c "keystone-manage db_sync" keystone
+  when: master == 1
+
+- name: Init Fernet 
+  shell: |
+    keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone
+    keystone-manage credential_setup --keystone-user keystone --keystone-group keystone
+
+
+- name: Guide keystone
+  shell: |
+    keystone-manage bootstrap --bootstrap-password "{{ keystone_password }}" \
+    --bootstrap-admin-url http://{{admin_vip}}:35357/v3/ \
+    --bootstrap-internal-url http://{{admin_vip}}:5000/v3/ \
+    --bootstrap-public-url http://{{admin_vip}}:5000/v3/ \
+    --bootstrap-region-id RegionOne
+  when: master == 1
+
+- name: Fetch cookie file                                          
+  fetch: 
+    src: /etc/keystone/fernet-keys/{{item}}
+    dest: /tmp/backup                                              
+  when: master == 1                                                
+  with_items:
+    - 0
+    - 1
+
+- name: copy cookie file to another                                
+  copy:
+    src: /tmp/backup/galera01/etc/keystone/fernet-keys/{{item}}
+    dest: /etc/keystone/fernet-keys/{{item}}
+    force: yes
+    owner: keystone
+    group: keystone
+    mode: 0600
+  when: master != 1
+  with_items:
+    - 0
+    - 1
+
+- name: Config httpd
+  replace: 
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '(^Listen\s*).*(80)'
+    replace: 'Listen {{admin_ip}}:\2'
+    backup: yes
+
+- name: Create link file
+  file:
+    src: /usr/share/keystone/wsgi-keystone.conf
+    dest: /etc/httpd/conf.d/wsgi-keystone.conf
+    state: link
+
+- name: Config keystone httpd config
+  replace: 
+    path: /etc/httpd/conf.d/wsgi-keystone.conf 
+    regexp: '(^Listen\s*).*({{item}})'
+    replace: 'Listen {{admin_ip}}:\2'
+    backup: yes
+  with_items:
+    - 5000
+    - 35357
+
+- name: Start and Enable httpd
+  systemd:
+    name: httpd.service
+    state: started
+    enabled: yes
+
+- name: Add admin-openrc
+  template:
+    src: admin-openrc.j2
+    dest: /root/admin-openrc
+    mode: '700'
+    backup: yes
+   
+- name: Add domain
+  shell: |
+    sleep 10
+    . ~/admin-openrc
+    openstack domain create --description "{{ item.description }}"  "{{ item.name }}" 
+  with_items:
+    - "{{ domain }}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Add project
+  shell: |
+    . ~/admin-openrc
+    openstack project create --domain "{{item.domain}}"   --description "{{item.description}}"  "{{item.name}}" 
+  with_items:
+    - "{{project}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Add User
+  shell: |
+    . ~/admin-openrc 
+    openstack user create --domain "{{item.domain}}"  --password "{{item.password}}"  "{{item.name}}" 
+  with_items:
+    - "{{user}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Add role
+  shell: |
+    . ~/admin-openrc
+    openstack role create "{{item}}" 
+  with_items:
+    - "{{role}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: relevance project and user role
+  shell: |
+     . ~/admin-openrc
+     openstack role add --project "{{item.project}}"  --user "{{item.user}}"  "{{item.role}}" 
+  with_items:
+    - "{{bind}}"
+  when: master == 1
+

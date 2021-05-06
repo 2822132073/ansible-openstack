@@ -1,0 +1,31 @@
+---
+# vars file for keystone
+user_password: 123456
+
+# 这里的domain和project是一个列表,可以写多个,但是不能重复
+domain:
+  - name: example
+    description: Domain
+project:
+  - name: service
+    description: "Service Project"
+    domain: default 
+  - name: demo
+    description: "Demo Project"
+    domain: default 
+user:
+  - name: demo
+    domain: default
+    password: 123456
+bind:
+  - project: demo 
+    user: demo 
+    role: user
+role:
+  - user
+config:
+  /etc/keystone/keystone.conf:
+    database:
+      connection: mysql+pymysql://keystone:{{user_password}}@loadip/keystone
+    token:
+      provider: fernet

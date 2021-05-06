@@ -1,0 +1,21 @@
+---
+- name: set_password
+  mysql_user:
+    login_host: "{{login_host}}"
+    login_user: "root"
+    name: "root"
+    password: "{{mysql_password}}"
+    priv: '*.*:ALL,GRANT'
+    host_all: yes
+    state: present
+
+- name: add_root
+  mysql_user:
+    login_host: "{{login_host}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: "root"
+    password: "{{ mysql_password }}"
+    priv: '*.*:ALL,GRANT'
+    host: "%"
+    state: present

@@ -1,0 +1,55 @@
+global_defs {
+router_id {{ ansible_hostname }}
+script_user root
+enable_script_security
+}
+vrrp_script check_haproxy {
+script "/etc/keepalived/scripts/check_haproxy.sh"
+interval 3
+rise 1
+fall 1
+weight 15
+}
+
+vrrp_sync_group VG01 {
+group {
+HA-HAproxy
+}
+global_tracking
+}
+garp_group {
+garp_interval 1
+gna_interval 1
+interfaces {
+{{ admin_device }}
+}
+}
+vrrp_instance HA-HAproxy {
+nopreempt
+state BACKUP
+priority 100
+interface {{ admin_device }}
+use_vmac
+vmac_xmit_base
+advert_int 2
+authentication {
+auth_type PASS
+auth_pass 1A123456B1
+}
+virtual_router_id 88
+virtual_ipaddress {
+{{ admin_vip }} dev {{ admin_device }}
+{{ public_vip }} dev {{ public_device }}
+}
+track_interface {
+{% for foo in ansible_interfaces %}
+{% if foo != "lo" %}
+{{ foo }}
+{% endif %}
+{% endfor %}
+
+}
+track_script {
+check_haproxy
+}
+}

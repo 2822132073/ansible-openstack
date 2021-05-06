@@ -1,0 +1,39 @@
+---
+# vars file for nova-compute
+config:
+  /etc/nova/nova.conf:
+    DEFAULT:
+      enabled_apis: osapi_compute,metadata
+      firewall_driver: nova.virt.firewall.NoopFirewallDriver
+      my_ip: "{{admin_ip}}"
+      transport_url: rabbit://openstack:{{rabbitMQ_password}}@loadip
+      use_neutron: 'True'
+    api:
+      auth_strategy: keystone
+    glance:
+      api_servers: http://loadip:9292
+    keystone_authtoken:
+      auth_type: password
+      auth_url: http://loadip:5000/v3
+      memcached_servers: 10.0.0.121:11211
+      password: "{{keystone_password}}"
+      project_domain_name: default
+      project_name: service
+      user_domain_name: default
+      username: nova
+    oslo_concurrency:
+      lock_path: /var/lib/nova/tmp
+    placement:
+      auth_type: password
+      auth_url: http://loadip:5000/v3
+      os_region_name: RegionOne
+      password: "{{placement_password}}"
+      project_domain_name: Default
+      project_name: service
+      user_domain_name: Default
+      username: placement
+    vnc:
+      enabled: 'True'
+      novncproxy_base_url: http://loadip:6080/vnc_auto.html
+      server_listen: 0.0.0.0
+      server_proxyclient_address: $my_ip

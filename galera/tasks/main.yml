@@ -1,0 +1,104 @@
+---
+# tasks file for galera
+- name: Acquire ip
+  shell: |
+    ifconfig |egrep "inet\s" |awk '{print $2}'|grep -v "127.0.0.1"|egrep "{{admin_segment}}.*"
+  register: results
+
+- name: set ip
+  set_fact:
+    admin_ip: "{{results.stdout}}"
+
+- name: transfer repo file
+  copy:
+    src: "{{item}}"
+    dest: "/etc/yum.repos.d/{{item}}.repo"
+    backup: yes
+  with_items:
+    - dvd.repo
+    - openstack-queens.repo
+    
+- name: debug
+  debug:
+    msg: "{{admin_ip}}"
+
+- name: set hosts file
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      {{yum_ip}} yum.test.com
+    marker: "#{mark} ansible yum.test.com  hosts"
+    backup: yes
+
+- name: Install galera mysql
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - libibverbs
+    - MySQL-python
+    - rsync 
+    - galera-3
+    - mysql-wsrep-5.7 
+    - mysql-wsrep-libs-5.7
+    - mysql-wsrep-server-5.7
+    - mysql-wsrep-client-5.7
+    - mysql-wsrep-common-5.7
+
+- name: Start and Enable mysql
+  systemd: 
+    name: mysqld
+    enabled: yes
+    state: started
+
+- name: Tranfer Initmysql
+  template:
+    src: init_mysql.sh.j2
+    dest: /tmp/init_mysql.sh
+    mode: '700'
+    backup: yes
+
+- name: Execute InitMysql
+  shell: |
+    /bin/bash /tmp/init_mysql.sh
+  ignore_errors: yes
+
+- name: Create galera config
+  template:
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    backup: yes
+
+- name: Create link
+  file:
+    src: "/usr/lib64/galera-3/libgalera_smm.so"
+    dest: "/usr/lib64/libgalera_smm.so"
+    state: link
+
+- name: Guide galera cluster
+  shell: |
+    systemctl stop mysqld
+    /usr/bin/mysqld_bootstrap
+  when: master == 1
+
+- name: Guide galer cluster
+  shell: |
+    systemctl restart mysqld
+  when: master != 1
+
+
+- name: Create failure recovery file
+  copy:
+    src: start_galera_mysql.sh
+    dest: /root/start_galera_mysql.sh
+    mode: 755
+
+- name: Add Crontab task
+  block:
+    - lineinfile:
+        path: /etc/rc.d/rc.local
+        line: 'bash /root/start_galera_mysql.sh'
+        create: yes
+    - file:
+        path: /etc/rc.d/rc.local
+        mode: 755

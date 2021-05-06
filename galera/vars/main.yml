@@ -1,0 +1,14 @@
+---
+# vars file for galera
+repo_name:
+  - dvd
+  - openstack-queens
+mysql_install:
+  - MySQL-python
+  - rsync 
+  - galera-3
+  - mysql-wsrep-5.7 
+  - mysql-wsrep-libs-5.7
+  - mysql-wsrep-server-5.7
+  - mysql-wsrep-client-5.7
+  - mysql-wsrep-common-5.7

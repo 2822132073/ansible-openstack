@@ -1,0 +1,66 @@
+---
+# tasks file for mysql
+- name: transfer repo file
+  copy:
+    src: "{{item}}.repo"
+    dest: "/etc/yum.repos.d/{{item}}.repo"
+    backup: yes
+  with_items:
+    - "{{repo_name}}"
+
+- name: set hosts file
+  blockinfile:
+    path: /etc/hosts
+    block: |
+      {{yum_ip}} yum.test.com
+    marker: "#{mark} ansible yum.test.com  hosts"
+    backup: yes
+
+- name: install mariadb
+  yum:
+    name: "{{ item }}"
+    state: installed
+  with_items:
+    - "{{ require_install }}"
+  notify: 
+    - set_password
+    - add_root
+
+- name: create openstack mysql config
+  template:
+    src: openstack.cnf.j2
+    dest: /etc/my.cnf.d/openstack.cnf 
+    backup: yes
+
+- name: enable mariadb
+  systemd: 
+    state: started
+    name: mariadb
+    enabled: yes
+
+- meta: flush_handlers
+- name: remove_user
+  mysql_user:
+    login_host: "{{ login_host }}"
+    login_password: "{{ mysql_password }}"
+    login_user: "root"
+    name: ''
+    host_all: yes
+    state: absent
+    check_implicit_admin: yes
+
+
+- name: remove_test_db
+  mysql_db: 
+    login_host: "{{ login_host }}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: test
+    state: absent
+
+
+- name: restart_mysql
+  service:
+    name: mariadb
+    state: restarted 
+

@@ -1,0 +1,159 @@
+---
+# tasks file for nova-server
+- name: Achieve data from host
+  shell: |
+      ifconfig |grep -B1 "{{admin_segment}}"|sed "s#inet##g"|tr -d " "|awk -F":|net" '{print $1}'
+  register: results
+
+- name: set admin ip and admin device
+  set_fact:
+    admin_ip: "{{results.stdout_lines[1]}}"
+    admin_device: "{{results.stdout_lines[0]}}"
+
+- name: Create a new database with name "{{item}}"
+  mysql_db:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: "{{item}}"
+    state: present
+  with_items:
+    - "{{database_name}}"
+  when: master == 1
+ 
+- name:  Create a new user with name "{{ database_name }}"
+  mysql_user:
+    login_host: "{{admin_vip}}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    name: "{{db_user_name}}"
+    priv: "{{item.0}}.*:ALL"
+    host: "{{item.1}}"
+    password: "{{db_user_password}}"
+    state: present
+    append_privs: true
+  with_cartesian:
+    - "{{database_name}}"
+    - "{{user_privilege}}"
+  when: master == 1
+
+- name: install nova-server
+  yum:
+    name: "{{item}}"
+    state: installed
+  with_items:
+    - openstack-nova-api 
+    - openstack-nova-conductor
+    - openstack-nova-console
+    - openstack-nova-novncproxy 
+    - openstack-nova-scheduler
+    - openstack-nova-placement-api
+
+- name: Add User
+  shell: |
+    . ~/admin-openrc
+    openstack user create --domain "{{item.domain}}" --password "{{item.password}}" "{{item.name}}" 
+  with_items:
+    - "{{user}}"
+  ignore_errors: yes
+  when: master == 1
+
+
+- name: relevance project and user role
+  shell: |
+     . ~/admin-openrc
+     openstack role add --project "{{item.project}}" --user "{{item.user}}"  "{{item.role}}" 
+  with_items:
+    - "{{bind}}"
+  ignore_errors: yes
+  when: master == 1
+
+
+- name: Create service
+  shell: |
+    . ~/admin-openrc
+    openstack service create --name "{{item.name}}" --description "{{item.description}}" "{{item.contend}}" 
+  with_items:
+    - "{{create_service}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Create endpoint
+  shell: |
+    . ~/admin-openrc
+    openstack endpoint create --region RegionOne "{{item.0.name}}" "{{item.1}}" "{{item.0.url}}" 
+  with_cartesian:
+    - "{{endpoint}}"
+    - "{{zone}}"
+  ignore_errors: yes
+  when: master == 1
+
+- name: Create Keystone config shell script
+  template:
+    src: openstack_config_nova_server.sh.j2
+    dest: /tmp/openstack_config_nova_server.sh
+    mode: '700'
+    backup: yes
+
+- name: Execute keystone shell script
+  shell: |
+    /bin/bash /tmp/openstack_config_nova_server.sh
+
+- name: Alter port
+  replace:
+    path: /etc/httpd/conf.d/00-nova-placement-api.conf
+    regexp: '(^Listen\s*).*(8778)'
+    replace: 'Listen {{admin_ip}}:\2'
+    backup: yes
+
+- name: Config httpd
+  blockinfile:
+    path: /etc/httpd/conf.d/00-nova-placement-api.conf
+    backup: yes
+    marker: "#{mark} nova http config"
+    insertafter: \s*ErrorLog\s
+    block: |
+      <Directory /usr/bin>
+        <IfVersion >= 2.4>
+           Require all granted
+        </IfVersion>
+        <IfVersion < 2.4>
+           Order allow,deny
+           Allow from all
+        </IfVersion>
+      </Directory>
+
+
+- name: Restart Httpd
+  service:
+    name: httpd
+    state: restarted
+
+- name: Sync Database api_db
+  shell: |
+     su -s /bin/sh -c "nova-manage api_db sync" nova
+  when: master == 1
+
+- name: Register cell0
+  shell: |
+    su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova
+  when: master == 1
+
+- name: Create cell and cell1
+  shell: |
+    su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova
+  when: master == 1
+
+- name: Sync Database nova
+  shell: |
+    su -s /bin/sh -c "nova-manage db sync" nova
+  when: master == 1
+
+- name: Start and Enable nova
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+  with_items:
+    - "{{service}}"
+
