@@ -40,5 +40,3 @@ yum_ip=10.0.0.73
 - cinder
 - nova-compute
 - neutron-compute
-## 缺陷
-本脚本尚未完成
